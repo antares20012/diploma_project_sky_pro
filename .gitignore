@@ -1,0 +1,61 @@
+# === Настройки PyCharm / JetBrains IDE ===
+# Игнорируем персональные настройки, кэш и конфигурации запусков
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionary.xml
+.idea/sonarlint/
+
+# Игнорируем локальные полки (наброски) и историю изменений
+.idea/shelf/
+.idea/vcs.xml
+
+# Игнорируем пароли и настройки подключений к базам данных
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/dataSources.ids
+
+# Игнорируем логи и временные файлы самой IDE
+.idea/caches/
+.idea/httpRequests/
+
+# (Опционально) Если вы хотите полностью скрыть папку .idea, раскомментируйте строку ниже:
+.idea/
+
+# === Окружение Python и зависимости ===
+# Игнорируем виртуальные окружения (любые стандартные имена)
+.venv/
+venv/
+ENV/
+env/
+
+# === Кэш Python и временные файлы ===
+# Игнорируем скомпилированный байт-код
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Игнорируем кэш сборщиков пакетов (pip) и библиотек
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+
+# === Секреты и базы данных ===
+# Игнорируем файлы конфигурации с паролями и токенами
+.env
+.env.local
+*.secret
+
+# Base данных SQLite (часто используется при локальной разработке)
+*.sqlite3
+*.db
+
+# === Системные файлы ===
+# Игнорируем мусор операционных систем
+.DS_Store
+Thumbs.db
