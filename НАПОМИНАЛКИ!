@@ -1,0 +1,6 @@
+# 1. Не забывай ставить root директорию!
+# 2. create branch->edit in a new branch->
+    Git->Git Commit->git push->create pull request->merge pull request->
+    checkout main->checkout and update!!!!
+# 3. freeze requirements.txt at the end of the project
+# 4. лучше закомитить и отправть, чем потом вспоминать, что ж ты такое натворил
