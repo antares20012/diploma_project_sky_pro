@@ -1,4 +1,4 @@
-from typing import Dict
+
 import time
 import os
 from datetime import datetime
@@ -10,10 +10,13 @@ from selenium.webdriver.common.keys import Keys
 
 
 
+
 class GitPage:
-    def __init__(self, driver, url: str, credentials: Dict[str, str]):
+    def __init__(self, driver, url: str, credentials=None):
+        self.credentials = None
         self.driver = driver
         self.url = url
+        self.credentials = credentials
         self.wait = WebDriverWait(driver, 10)
 
 
@@ -70,30 +73,6 @@ class GitPage:
         repo_name_input = self.wait.until(
             EC.element_to_be_clickable((By.XPATH, "//input[@id='repository-name-input']"))
         )
-        # repo_name = f"{login}_{timestamp}"
-        # repo_name_input.clear()
-        # repo_name_input.send_keys(repo_name)
-        # self.wait.until(
-        #     EC.presence_of_element_located(
-        #         (By.XPATH, "//*[contains(@id, 'repo-available') or contains(@class, 'success')]"))
-        # )
-        # self.wait.until(
-        #     EC.text_to_be_present_in_element_value(
-        #         (By.ID, "repository-name-input"),
-        #         repo_name))
-        #
-        # create_button = self.wait.until(
-        #     EC.element_to_be_clickable((
-        #         By.XPATH, "//span[contains(text(),'Create repository')]"
-        #     )))
-        # create_button.click()
-        #
-        # expected_url_part = f"/{login}/{repo_name}"
-        # print(f"Ожидаем переход на URL, содержащий: {expected_url_part}")
-        # self.wait.until(EC.url_contains(expected_url_part))
-        #
-        # print(f"Создан репозиторий: {repo_name}. Текущий URL: {self.driver.current_url}")
-        # return repo_name
 
         repo_name = f"{login}_{timestamp}"
         repo_name_input.clear()
@@ -130,7 +109,7 @@ class GitPage:
         return repo_name
 
 
-    def create_new_fil(self, repo_name: str, file_name: str, timestamp: str = None) -> str:
+    def create_new_file(self, repo_name: str, file_name: str, timestamp: str = None) -> str:
         if not timestamp:
             timestamp = os.environ.get("MY_FILE_TIMESTAMP") or datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -140,34 +119,32 @@ class GitPage:
         else:
             final_file_name = f"{file_name}_{timestamp}"
 
-        login = self.get_logged_in_username()
+        login = self.credentials['login'] 
 
         repo_url = f"https://github.com/{login}/{repo_name}"
         print(repo_url)
         self.driver.get(repo_url)
 
-        # 2. Ищем ссылку "creating a new file" на странице Quick Setup и кликаем по ней
-        # create_new_file_link = self.wait.until(
-        #     EC.element_to_be_clickable(
-        #         (By.XPATH, "//a[contains(@href, '/new/main') or contains(text(), 'creating a new file')]"))
-        # )
-        # create_new_file_link.click()
+
         create_new_file_link = self.wait.until(
-            EC.element_to_be_clickable((By.LINK_TEXT, "creating a new file"))
-        )
+            EC.element_to_be_clickable((
+                By.XPATH, "//a[contains(text(), 'creating a new file')]"
+            )))
         create_new_file_link.click()
-        time.sleep(3)
-        # 3. Ожидаем поле ввода имени файла по актуальным селекторам GitHub
 
         file_name_input = self.wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH,
-                 "//input[@aria-label='File name' or @name='filename' or @id='file-name-editor']"))
+            EC.visibility_of_element_located((
+                By.XPATH,
+                "//input[@aria-label='File name'] | //input[@name='filename'] | //input[contains(@id, 'file-name-editor')]"
+            ))
         )
+
+        # Взаимодействие с полем ввода
+        time.sleep(1)
+        file_name_input.click()  # Важно кликнуть перед отправкой клавиш
         file_name_input.send_keys(Keys.CONTROL + "a")
         file_name_input.send_keys(Keys.BACKSPACE)
-
-        time.sleep(randint(1, 3))
+        time.sleep(randint(1, 2))
         file_name_input.send_keys(final_file_name)
 
         commit_dialog_btn = self.wait.until(
@@ -181,5 +158,78 @@ class GitPage:
         )
         time.sleep(randint(2, 5))
         confirm_commit_btn.click()
+
+        self.wait.until(EC.none_of(EC.url_contains("/new/")))
+
         print(f"Создан файл:{final_file_name}")
         return final_file_name
+
+
+    def code_editor(self, repo_name: str, file_name: str, timestamp: str) -> str:
+
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        login = self.credentials['login']
+        repo_url = f"https://github.com/{login}/{repo_name}"
+        if self.driver.current_url != repo_url:
+            self.driver.get(repo_url)
+
+        # 2. Ищем файл по title или по частичному тексту
+        # file_link = self.wait.until(EC.element_to_be_clickable((
+        #     By.XPATH, f"//*[@role='link'][contains(@title, '{file_name}') or contains(@aria-label, '{file_name}')]"
+        # )))
+        # file_link.click()
+
+        # file_element = self.wait.until(EC.presence_of_element_located((
+        #     By.CSS_SELECTOR, f"[role='row'] a[title='{file_name}'], .js-navigation-item a[title='{file_name}']"
+        # )))
+
+        file_element = self.wait.until(EC.presence_of_element_located((
+            By.XPATH, f"//a[@title='{file_name}' or text()='{file_name}']"
+        )))
+        self.driver.execute_script("arguments[0].click();", file_element)
+
+        edit_btn = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='edit-button'] svg")))
+        edit_btn.click()
+
+        editor_textarea = self.wait.until(EC.presence_of_element_located((
+            By.XPATH, "//div[@role='textbox']"
+        )))
+
+        editor_textarea.click()
+        editor_textarea.send_keys(Keys.CONTROL + "a")
+        editor_textarea.send_keys(Keys.BACKSPACE)
+
+        new_text = "def greeting():\n    print('Hello, World!')\ngreeting()\n"
+        editor_textarea.send_keys(new_text)
+
+        commit_changes_btn = self.wait.until(
+            EC.element_to_be_clickable((
+                By.XPATH, "//span[contains(text(),'Commit changes...')]"
+            )))
+        commit_changes_btn.click()
+
+        commit_message_input = self.wait.until(
+            EC.presence_of_element_located((
+                By.XPATH, "//input[@id='commit-message-input']"
+            )))
+        commit_message_input.clear()
+        commit_message_input.send_keys(f"{current_time}")
+
+        # confirm_commit_btn = self.wait.until(
+        #     EC.element_to_be_clickable((
+        #         By.XPATH, "//button[contains(., 'Commit changes') and not(@disabled)]"
+        #         # By.CSS_SELECTOR, "main-container button[type='submit']"
+        # )))
+        # confirm_commit_btn.click()
+
+        confirm_commit_btn = self.wait.until(EC.element_to_be_clickable((
+            By.XPATH, "//button[@aria-disabled='false']"
+        )))
+        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", confirm_commit_btn)
+        confirm_commit_btn.click()
+
+        self.wait.until(EC.none_of(EC.url_contains("/edit/")))
+
+        print(f"Файл {file_name} успешно сохранен!")
+        return f"Update {file_name} at {current_time}"
