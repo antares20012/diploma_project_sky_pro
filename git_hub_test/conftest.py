@@ -129,15 +129,47 @@
 # #     # Используем SHA в следующем запросе
 # #     print(f"Работаем с коммитом: {credentials['last_commit_sha']}")
 #
-
-
 import os
+import base64
+from faker import Faker
 from datetime import datetime
 import pytest
+from dotenv import load_dotenv
 from selenium import webdriver
 from selenium_stealth import stealth
 from pages.GitPageUI import GitPage
+from pages.GitPageAPI import GitPageAPI
 
+load_dotenv()
+
+@pytest.fixture(scope="session")
+def github_token():
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        pytest.fail("Ошибка: Переменная окружения GITHUB_TOKEN не задана!")
+    return token
+
+@pytest.fixture(scope="function")
+def git_api(github_token, credentials):
+    # Фикстура возвращает готовый экземпляр класса для каждого теста
+    login = credentials["login"]
+    return GitPageAPI(url="https://api.github.com", token=github_token, login=login)
+
+@pytest.fixture
+def to_base64():
+    """Фикстура для кодирования строк в Base64."""
+    def _encode(text: str) -> str:
+        if not text:
+            return ""
+        return base64.b64encode(text.encode("utf-8")).decode("utf-8")
+    return _encode
+
+@pytest.fixture
+def random_faker_file_name():
+    fake = Faker()
+    # fake.word() вернет случайное английское слово, например "development"
+    # Добавляем расширение, чтобы получилось "development.md"
+    return f"{fake.word()}"
 
 @pytest.fixture(scope="function")
 def driver():
@@ -178,6 +210,13 @@ def pytest_configure(config):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.environ["MY_FILE_TIMESTAMP"] = timestamp
 
+
+@pytest.fixture()
+def repo_name(credentials) -> str:
+    """Формирует уникальное имя репозитория."""
+    login = credentials["login"]
+    timestamp = os.environ.get("MY_FILE_TIMESTAMP")
+    return f"{login}_{timestamp}"
 
 # @pytest.fixture(scope="function")
 # def github_repo_name(driver, credentials):
