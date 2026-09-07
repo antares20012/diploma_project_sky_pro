@@ -2,6 +2,10 @@ import time
 import os
 from random import randint
 from pages.GitPageUI import GitPage
+import pytest
+
+
+pytestmark = pytest.mark.ui
 
 
 def test_check_profile(driver, credentials):
@@ -19,6 +23,7 @@ def test_create_repo(driver, credentials):
     git_test = GitPage(driver, "https://github.com", credentials)
     git_test.login_git(credentials['login'], credentials['password'])
     git_test.create_repository(login=credentials['login'], timestamp=timestamp)
+
 
 def test_create_new_file(driver, credentials):
     """Тест создаёт файл в уже существующем (благодаря фикстуре) репозитории."""
@@ -38,7 +43,6 @@ def test_create_new_file(driver, credentials):
     git_test.delete_file(login=credentials['login'], repo_name=repo_name, file_name=final_name)
     result_text = git_test.delete_repo(login=login, password=password, repo_name=repo_name)
     assert result_text is not None
-
 
 
 def test_file_edits(driver, credentials):
@@ -90,6 +94,7 @@ def test_delete_file(driver, credentials):
     result_text = git_test.delete_repo(login=login, password=password, repo_name=repo_name)
     assert result_text is not None
 
+
 def test_delete_repo(driver, credentials):
     """Тест удаляет динамически созданный фикстурой репозиторий."""
     timestamp = os.environ.get("MY_FILE_TIMESTAMP")
@@ -103,5 +108,3 @@ def test_delete_repo(driver, credentials):
 
     result_text = git_test.delete_repo(login=login, password=password, repo_name=repo_name)
     assert result_text is not None
-
-

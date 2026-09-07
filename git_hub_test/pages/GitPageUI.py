@@ -1,15 +1,12 @@
-
 import time
 import os
 from datetime import datetime
 from random import randint
-
 from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-
 
 
 class GitPage:
@@ -25,8 +22,7 @@ class GitPage:
 
 
     def login_git(self, login: str, password: str):
-        """
-        Входит на страницу пользователя в а проприетарной платформе разработчиков Github.
+        """Входит на страницу пользователя в а проприетарной платформе разработчиков Github.
         url = https://github.com/login
         Вводит указанные в фикстуре логин и пароль
         :param login:
@@ -104,11 +100,8 @@ class GitPage:
         create_button = self.wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
         )
-
-
         self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", create_button)
         time.sleep(3)
-
         try:
             create_button.click()
         except Exception:
@@ -119,7 +112,6 @@ class GitPage:
 
         print(f"Создан репозиторий: {repo_name}")
         return repo_name
-
 
     def create_new_file(self, repo_name: str, file_name: str, timestamp: str = None) -> str:
         """
@@ -184,12 +176,8 @@ class GitPage:
         confirm_commit_btn = self.wait.until(EC.element_to_be_clickable((
             By.XPATH, "//button[@aria-disabled='false']"
         )))
-
-
         time.sleep(randint(1, 3))
         confirm_commit_btn.click()
-
-        # 7. Ожидание завершения процесса (уход со страницы редактирования)
         self.wait.until(EC.none_of(EC.url_contains("/new/")))
         print(f"Создан файл: {final_file_name}")
 
@@ -259,9 +247,9 @@ class GitPage:
         """
         1. Удаляет созданный в репозитории файл.
         2. Оставляет заданный коммит.
-        :param login:
-        :param repo_name:
-        :param file_name:
+        :param login: login
+        :param repo_name: repo_name
+        :param file_name: file_name
         :return:
         """
         current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -375,33 +363,3 @@ class GitPage:
                 (By.XPATH, "//div[@role='alert'] | //div[contains(@class, 'js-flash-alert')]"))
         )
         return success_alert.text
-
-    def is_file_present(self, repo_name: str, file_name: str, timeout: int = 5) -> bool:
-        """
-        Проверяет, присутствует ли файл в корневом каталоге указанного репозитория.
-
-        :param repo_name: Имя репозитория
-        :param file_name: Полное имя файла (включая расширение или таймстемп)
-        :param timeout: Время ожидания появления элемента в секундах
-        :return: True, если файл найден; False в противном случае
-        """
-        # Формируем URL главной страницы репозитория
-        repo_url = f"https://github.com/{self.credentials['login']}/{repo_name}"
-
-        # Переходим на страницу репозитория, если мы еще не там
-        if self.driver.current_url != repo_url:
-            self.driver.get(repo_url)
-
-        try:
-            # Селектор ищет ссылку на файл по его тексту внутри таблицы файлов GitHub
-            file_locator = (By.XPATH, f"//tr[contains(@class, 'react-directory-row')]//a[text()='{file_name}']")
-
-            # Ждем появления файла на странице
-            WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located(file_locator)
-            )
-            return True
-        except TimeoutException:
-            # Если время вышло и файл не найден — возвращаем False
-            return False
-
