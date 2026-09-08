@@ -10,6 +10,8 @@ from pages.GitPageAPI import GitPageAPI
 
 load_dotenv()
 
+
+
 @pytest.fixture(scope="session")
 def github_token():
     token = os.getenv("GITHUB_TOKEN")
@@ -42,7 +44,11 @@ def random_faker_file_name():
 @pytest.fixture(scope="function")
 def driver():
     options = webdriver.ChromeOptions()
-    options.add_argument("--start-maximized")
+
+    # --- ДОБАВЛЯЕМ HEADLESS РЕЖИМ ---
+    options.add_argument("--headless=new")  # Включаем современный headless
+    options.add_argument("--window-size=1920,1080")  # Заменяем --start-maximized
+    options.add_argument("--disable-gpu")  # Отключаем аппаратное ускорение
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
@@ -70,6 +76,7 @@ def credentials():
 
 def pytest_addoption(parser):
     parser.addoption("--file_timestamp", action="store", default="")
+    parser.addoption("--headless", action="store_true", help="Запуск браузера в фоновом режиме")
 
 
 def pytest_configure(config):
@@ -89,12 +96,11 @@ def repo_name(credentials) -> str:
 
 @pytest.fixture
 def temp_repo(git_api, repo_name):
-    # [Пре-условие]: Создаем репозиторий перед тестом
+
     repo_status, repo_data = git_api.create_repo(repo_name)
     assert repo_status in [200, 201], f"Не удалось создать репозиторий. Статус: {repo_status}"
 
-    yield repo_data  # Передаем данные репозитория в тест
+    yield repo_data
 
-    # [Пост-условие]: Удаляем репозиторий ВСЕГДА, даже если тест упал
     delete_status = git_api.delete_repo(repo_name)
     print(f"\nСтатус удаления репозитория: {delete_status}")

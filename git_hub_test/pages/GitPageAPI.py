@@ -1,9 +1,13 @@
+import json
 import requests
 import base64
 from faker import Faker
+import allure
 
 fake = Faker()
 file_name = fake.word()
+fake_login = fake.user_name()
+fake_email = fake.email()
 
 
 class GitPageAPI:
@@ -19,7 +23,7 @@ class GitPageAPI:
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28"
         }
-
+    @allure.step("Создание репозитория на странице авторизованного пользователя GitHub")
     def create_repo(self, repo_name: str):
         url = f"{self.url}/user/repos"
         response = requests.post(url, headers=self.headers, json={"name": repo_name})
@@ -36,43 +40,58 @@ class GitPageAPI:
         }
         return response.status_code, repo_data
 
+    @allure.step("Создание пустого файла в репозитории авторизованного пользователя GitHub")
     def create_empty_file(self, login: str, repo_name: str, file_name: str):
         url = f"{self.url}/repos/{login}/{repo_name}/contents/{file_name}"
         empty_content_b64 = base64.b64encode(b"").decode("utf-8")
 
-        commit =  {
-            "message": "Create empty file.",
-            "committer": {
-                "name": "antares20012",
-                "email": "4ingizxan20012@gmail.com"
+        with allure.step("Данные для коммита"):
+            commit = {
+                "message": f"Create file {file_name}",
+                "committer": {
+                    "name": f"{fake_login}",
+                    "email": f"{fake_email}"
                 },
-                "content": empty_content_b64
+                "content": empty_content_b64,
             }
+            allure.attach(
+                body=json.dumps(commit, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (commit)",
+                attachment_type=allure.attachment_type.JSON
+            )
+
 
         response = requests.put(url, headers=self.headers, json=commit)
         if response.status_code != 201:
             print(f"\n[GitHub Error Payload]: {response.json()}")
             return response.status_code, None
         # data = response.json()
-        res = response.json()
-        file_data = {
-            "content": {
-                "name": res.get("content", {}).get("name"),
-                "sha": res.get("content", {}).get("sha"),
-                "size": res.get("content", {}).get("size"),
-                "html_url": res.get("content", {}).get("html_url")
-            },
-            "commit": {
-                "sha": res.get("commit", {}).get("sha"),
-                "committer": {
-                    "name": res.get("commit", {}).get("committer", {}).get("name"),
-                    "email": res.get("commit", {}).get("committer", {}).get("email"),
+        with allure.step("Формирование данных для дальнейших тестов"):
+            res = response.json()
+            file_data = {
+                "content": {
+                    "name": res.get("content", {}).get("name"),
+                    "sha": res.get("content", {}).get("sha"),
+                    "size": res.get("content", {}).get("size"),
+                    "html_url": res.get("content", {}).get("html_url")
                 },
-                "message": res.get("commit", {}).get("message")
+                "commit": {
+                    "sha": res.get("commit", {}).get("sha"),
+                    "committer": {
+                        "name": res.get("commit", {}).get("committer", {}).get("name"),
+                        "email": res.get("commit", {}).get("committer", {}).get("email"),
+                    },
+                    "message": res.get("commit", {}).get("message")
+                }
             }
-        }
+            allure.attach(
+                body=json.dumps(file_data, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (file_data)",
+                attachment_type=allure.attachment_type.JSON
+            )
         return response.status_code, file_data
 
+    @allure.step("Чтение содержимого созданного/измененного файла")
     def read_file(self, login: str, repo_name: str, file_name: str):
         """
             Получает информацию о файле и декодирует его содержимое.
@@ -87,66 +106,92 @@ class GitPageAPI:
         # Если файл не найден или произошла ошибка, возвращаем статус и пустые данные
         if response.status_code != 200:
             return response.status_code, None, None
-        res = response.json()
-        file_data = {
-            "sha": res.get("sha"),
-            "name": res.get("name"),
-            "size": res.get("size")
-        }
+        with allure.step("Отображение содержимого созданного/измененного файла"):
+            res = response.json()
+            file_data_new = {
+                "sha": res.get("sha"),
+                "name": res.get("name"),
+                "size": res.get("size")
+            }
 
-        # 2. Извлекаем и декодируем контент из base64 в обычную строку
-        content_b64 = res.get("content", "")
-        # GitHub может возвращать текст со знаками переноса строки, убираем их перед декодированием
-        cleaned_b64 = content_b64.replace("\n", "").replace("\r", "")
+            content_b64 = res.get("content", "")
+            # GitHub может возвращать текст со знаками переноса строки, убираем их перед декодированием
+            cleaned_b64 = content_b64.replace("\n", "").replace("\r", "")
 
-        try:
-            decoded_text = base64.b64decode(cleaned_b64).decode("utf-8")
-        except Exception as e:
-            print(f"Ошибка декодирования: {e}")
-            decoded_text = ""
+            try:
+                decoded_text = base64.b64decode(cleaned_b64).decode("utf-8")
+            except Exception as e:
+                print(f"Ошибка декодирования: {e}")
+                decoded_text = ""
 
-        return response.status_code, file_data, decoded_text
+            allure.attach(
+                body=json.dumps(file_data_new, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (file_data_new)",
+                attachment_type=allure.attachment_type.JSON
+            )
 
+            allure.attach(
+                body=decoded_text,
+                name="Раскодированное содержимое файла (decoded_text)",
+                attachment_type=allure.attachment_type.TEXT
+            )
+
+        return response.status_code, file_data_new, decoded_text
+
+    @allure.step("Изменение последнего созданного файла в репозитории")
     def update_file(self, login: str, repo_name: str, file_name: str, to_base64, new_text: str, sha):
         url = f"{self.url}/repos/{login}/{repo_name}/contents/{file_name}"
         # new_text = "def greeting():\n    print('Hello, World!')\ngreeting()\n"
         encoded_string = to_base64(new_text)
-        commit = {
-            "message": f"Update file{file_name}",
-            "committer": {
-                "name": "antares20012",
-                "email": "4ingizxan20012@gmail.com"
-            },
-            "content": encoded_string,
-            "sha": sha
-        }
+        with allure.step("Данные для коммита"):
+            commit = {
+                "message": f"Update file {file_name}",
+                "committer": {
+                    "name": f"{fake_login}",
+                    "email": f"{fake_email}"
+                },
+                "content": encoded_string,
+                "sha": sha
+            }
+            allure.attach(
+                body=json.dumps(commit, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (commit)",
+                attachment_type=allure.attachment_type.JSON
+            )
 
         response = requests.put(url, headers=self.headers, json=commit)
         if response.status_code not in [200, 201]:
             print(f"\n[GitHub Error Payload]: {response.json()}")
             return response.status_code, None
 
-        res = response.json()
+        with allure.step("Формирование метаданных, необходимых для дальнейших тестов"):
+            res = response.json()
 
-        file_data = {
-            "content": {
-                "name": res.get("content", {}).get("name"),
-                "sha": res.get("content", {}).get("sha"),
-                "size": res.get("content", {}).get("size"),
-                "html_url": res.get("content", {}).get("html_url")
-            },
-            "commit": {
-                "sha": res.get("commit", {}).get("sha"),
-                "committer": {
-                    "name": res.get("commit", {}).get("committer", {}).get("name"),
-                    "email": res.get("commit", {}).get("committer", {}).get("email"),
+            file_data = {
+                "content": {
+                    "name": res.get("content", {}).get("name"),
+                    "sha": res.get("content", {}).get("sha"),
+                    "size": res.get("content", {}).get("size"),
+                    "html_url": res.get("content", {}).get("html_url")
                 },
-                "message": res.get("commit", {}).get("message")
+                "commit": {
+                    "sha": res.get("commit", {}).get("sha"),
+                    "committer": {
+                        "name": res.get("commit", {}).get("committer", {}).get("name"),
+                        "email": res.get("commit", {}).get("committer", {}).get("email"),
+                    },
+                    "message": res.get("commit", {}).get("message")
+                }
             }
-        }
+            allure.attach(
+                body=json.dumps(file_data, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (file_data)",
+                attachment_type=allure.attachment_type.JSON
+            )
         return response.status_code, file_data
 
-    def delete_last_modified_file(self, login: str, repo_name: str, file_name: str = None):
+    @allure.step("Удаление последнего созданного в репозитории файла")
+    def delete_last_modified_file(self, login: str, repo_name: str, file_name: str):
         """
         Находит последний измененный файл и удаляет его.
         Если передан file_name, берется именно он, иначе ищется динамически.
@@ -183,45 +228,30 @@ class GitPageAPI:
 
         current_file_sha = content_response.json().get("sha")
 
-        # 4. Исправлено: метод requests.delete
-        data = {
-            "message": f"Delete file {file_name}",
-            "sha": current_file_sha,
-            "committer": {"name": "antares20012", "email": "4ingizxan20012@gmail.com"}
-        }
+        with allure.step("Формирование данных для коммита"):
+            data = {
+                "message": f"Delete file {file_name}",
+                "sha": current_file_sha,
+                "committer": {
+                    "name": f"{fake_login}",
+                    "email": f"{fake_email}"
+                }
+            }
+            allure.attach(
+                body=json.dumps(data, indent=4, ensure_ascii=False),
+                name="Сформированные метаданные файла (data)",
+                attachment_type=allure.attachment_type.JSON
+            )
 
         response = requests.delete(content_url, headers=self.headers, json=data)
-        return response.status_code  # или просто response в зависимости от ваших ассертов
-
+        return response.status_code
+    @allure.step("Удаление репозитория")
     def delete_repo(self, repo_name: str):
         url = f"{self.url}/repos/{self.login}/{repo_name}"
         response = requests.delete(url, headers=self.headers)
         return response.status_code
 
-    # def download_last_repo(self, login: str, repo_name: str, ref: str):
-    #     """
-    #     Скачивает последний созданный репозиторий
-    #     :param login:
-    #     :param repo_name:
-    #     :param ref:
-    #     :return:
-    #     """
-    #     all_repo_url = f"{self.url}/users/{login}/repos"
-    #     repo_response = requests.get(all_repo_url, headers=self.headers, params={"per_page": 1})
-    #     if repo_response.status_code != 200:
-    #         return repo_response.status_code, None
-    #
-    #     repo_data = repo_response.json()
-    #     ref = repo_data.get("ref")
-    #     url = f"{self.url}/repos/{login}/{repo_name}/zipball/{ref}"
-    #     response = requests.get(url, headers=self.headers, json={"name": repo_name})
-    #
-    #     if response.status_code != 201:
-    #         print(f"\n[GitHub Error Payload]: {response.json()}")
-    #         return response.status_code, None
-    #
-    #     data = response.json()
-
+    @allure.step("Скачивание последнего созданного репозитория")
     def download_user_latest_repo(self, login: str, output_dir: str = "."):
         """
         Находит последний обновленный репозиторий пользователя и скачивает его.
@@ -230,8 +260,9 @@ class GitPageAPI:
         :param token: GitHub Personal Access Token (обязателен для приватных репозиториев)
         :param output_dir: Папка для сохранения архива
         """
-        print(f"Запрос списка репозиториев...")
+        allure.dynamic.parameter("Target Output Directory", output_dir)
 
+        print(f"Запрос списка репозиториев...")
         url = f"{self.url}/users/{login}/repos"
         response = requests.get(url, headers=self.headers)
         if response.status_code != 200:
@@ -247,12 +278,12 @@ class GitPageAPI:
         repos_sorted = sorted(repos, key=lambda x: x.get("updated_at", ""), reverse=True)
         latest_repo = repos_sorted[0]
         repo_name = latest_repo["name"]
-        # Берем владельца из ответа, так как при использовании токена это может быть ваш личный репозиторий
+
         owner_login = latest_repo["owner"]["login"]
 
         print(f"Найден последний репозиторий: {owner_login}/{repo_name}")
 
-        # Скачиваем ZIP-архив репозитория
+
         download_url = f"{self.url}/repos/{owner_login}/{repo_name}/zipball"
         output_path = f"{output_dir}/{repo_name}_latest.zip"
 
@@ -265,9 +296,17 @@ class GitPageAPI:
                     for chunk in download_resp.iter_content(chunk_size=8192):
                         file.write(chunk)
                 print(f"Успешно скачано в: {output_path}")
+
+
+                allure.attach(
+                    f"Файл успешно сохранен по пути: {output_path}\nДиректория: {output_dir}",
+                    name="Путь сохранения репозитория",
+                    attachment_type=allure.attachment_type.TEXT
+                )
                 return output_path
             else:
-                print(
-                    f"Ошибка скачивания архива! Код: {download_resp.status_code}\n{download_resp.text}"
-                )
+                error_msg = f"Ошибка скачивания архива! Код: {download_resp.status_code}\n{download_resp.text}"
+                print(error_msg)
+
+                allure.attach(error_msg, name="Ошибка скачивания", attachment_type=allure.attachment_type.TEXT)
                 return None

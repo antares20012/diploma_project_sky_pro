@@ -1,10 +1,19 @@
 import os
 import pytest
+import allure
 
 
-pytestmark = pytest.mark.api
+pytestmark =[
+    pytest.mark.api,
+    allure.epic("Платформа интеграций"),
+    allure.feature("GitHub API"),
+    allure.story("Управление репозиториями и файлами"),
+]
 
-
+@allure.title("Тестирование создания репозитория на странице пользователя в GitHub")
+@allure.description("Проверяет корректность API запросов при создании репозитория")
+@allure.feature("GitHub")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_create_repository(git_api, repo_name):
     status_code, repo_data = git_api.create_repo(repo_name)
     print(f"\nСтатус создания: {status_code}")
@@ -19,7 +28,10 @@ def test_create_repository(git_api, repo_name):
     print(f"Статус удаления: {delete_status}")
     assert delete_status == 204
 
-
+@allure.title("Тестирование создания пустого файла в репозитории на странице пользователя в GitHub")
+@allure.description("Проверяет корректность API запросов при создании файла")
+@allure.feature("GitHub")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_create_empty_file(git_api, repo_name,credentials, random_faker_file_name: str, temp_repo):
     repo_data = temp_repo
     login = credentials["login"]
@@ -31,8 +43,6 @@ def test_create_empty_file(git_api, repo_name,credentials, random_faker_file_nam
     file_status, file_data = git_api.create_empty_file(login, repo_name, file_name=random_faker_file_name)
 
     print(f"Статус создания файла: {file_status}")
-    print(f"Данные файла: {file_data}")
-
     # 3. Проверки файла
     assert file_status == 201
     assert file_data["content"]["name"] == random_faker_file_name
@@ -44,7 +54,10 @@ def test_create_empty_file(git_api, repo_name,credentials, random_faker_file_nam
     print(f"Статус удаления файла: {delete_file_status}")
     assert delete_file_status == 200
 
-
+@allure.title("Тестирование изменения последнего файла в репозитории на странице пользователя в GitHub")
+@allure.description("Проверяет корректность API запросов при изменении последнего файла")
+@allure.feature("GitHub")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_update_file(git_api, repo_name,credentials, random_faker_file_name: str, to_base64, temp_repo):
 
     repo_data = temp_repo
@@ -69,7 +82,10 @@ def test_update_file(git_api, repo_name,credentials, random_faker_file_name: str
     print(f"Часть текста: {code_text[:12]}")
     print(f"Статус обновления файла: {update_status}. Файл обновлен")
 
-
+@allure.title("Тестирование чтения последнего файла в репозитории на странице пользователя в GitHub")
+@allure.description("Проверяет корректность API запросов при чтении последнего файла")
+@allure.feature("GitHub")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_read_file(git_api, repo_name, credentials, random_faker_file_name: str, to_base64, temp_repo):
 
     login = credentials["login"]
@@ -106,7 +122,10 @@ def test_read_file(git_api, repo_name, credentials, random_faker_file_name: str,
     assert file_data["sha"] is not None and file_data["sha"] != "", "Поле 'sha' пустое"
     assert decoded_text == expected_text, f"Текст не совпадает. Ожидалось: '{expected_text}', получили: '{decoded_text}'"
 
-
+@allure.title("Тестирование скачивания репозитория со страницы пользователя в GitHub")
+@allure.description("Проверяет корректность API запросов при скачивании репозитория")
+@allure.feature("GitHub")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_download_user_latest_repo(git_api, repo_name,credentials, random_faker_file_name: str, to_base64, temp_repo):
     login = credentials["login"]
     create_status, create_data = git_api.create_empty_file(login, repo_name, file_name=random_faker_file_name)

@@ -22,7 +22,7 @@ class GitPage:
 
 
     def login_git(self, login: str, password: str):
-        """Входит на страницу пользователя в а проприетарной платформе разработчиков Github.
+        """Входит на страницу пользователя на проприетарной платформе разработчиков Github.
         url = https://github.com/login
         Вводит указанные в фикстуре логин и пароль
         :param login:
