@@ -12,6 +12,12 @@ fake_email = fake.email()
 
 class GitPageAPI:
     def __init__(self, token: str, login: str, url: str = "https://api.github.com"):
+        """
+        Конструктор класса для тестирования API GitHub
+        :param token: Ваш личный токен авторизации "tokens (classic)"
+        :param login: Ваш логин, используемый для авторизации в GitHub
+        :param url: URL для API "https://api.github.com"
+        """
         self.url = url.rstrip('/')
         self.token = token
         self.login = login
@@ -25,6 +31,11 @@ class GitPageAPI:
         }
     @allure.step("Создание репозитория на странице авторизованного пользователя GitHub")
     def create_repo(self, repo_name: str):
+        """
+        Создает новый репозиторий у авторизованного рользователя GitHub
+        :param repo_name: repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
+        :return: кортеж (response.status_code, repo_data)
+        """
         url = f"{self.url}/user/repos"
         response = requests.post(url, headers=self.headers, json={"name": repo_name})
 
@@ -42,6 +53,12 @@ class GitPageAPI:
 
     @allure.step("Создание пустого файла в репозитории авторизованного пользователя GitHub")
     def create_empty_file(self, login: str, repo_name: str, file_name: str):
+        """
+        :param login: Логин пользователя (получается из фикстуры credentials)
+        :param repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
+        :param file_name: Имя файла (формируется при помощи библиотеки faker)
+        :return: Данные созданного файла в формате словаря (file_data)
+        """
         url = f"{self.url}/repos/{login}/{repo_name}/contents/{file_name}"
         empty_content_b64 = base64.b64encode(b"").decode("utf-8")
 
@@ -65,7 +82,7 @@ class GitPageAPI:
         if response.status_code != 201:
             print(f"\n[GitHub Error Payload]: {response.json()}")
             return response.status_code, None
-        # data = response.json()
+
         with allure.step("Формирование данных для дальнейших тестов"):
             res = response.json()
             file_data = {
@@ -84,6 +101,7 @@ class GitPageAPI:
                     "message": res.get("commit", {}).get("message")
                 }
             }
+
             allure.attach(
                 body=json.dumps(file_data, indent=4, ensure_ascii=False),
                 name="Сформированные метаданные файла (file_data)",
@@ -95,15 +113,14 @@ class GitPageAPI:
     def read_file(self, login: str, repo_name: str, file_name: str):
         """
             Получает информацию о файле и декодирует его содержимое.
-            :param login: Имя пользователя или организации
-            :param repo_name: Название репозитория
+            :param login: Логин пользователя (получается из фикстуры credentials)
+            :param repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
             :param file_path: Путь к файлу в репозитории (например, 'folder/file.txt')
             :return: кортеж (status_code, response_json, decoded_text)
             """
         url = f"{self.url}/repos/{login}/{repo_name}/contents/{file_name}"
         response = requests.get(url, headers=self.headers)
 
-        # Если файл не найден или произошла ошибка, возвращаем статус и пустые данные
         if response.status_code != 200:
             return response.status_code, None, None
         with allure.step("Отображение содержимого созданного/измененного файла"):
@@ -114,8 +131,9 @@ class GitPageAPI:
                 "size": res.get("size")
             }
 
+            download_name = file_data_new.get("name")
+
             content_b64 = res.get("content", "")
-            # GitHub может возвращать текст со знаками переноса строки, убираем их перед декодированием
             cleaned_b64 = content_b64.replace("\n", "").replace("\r", "")
 
             try:
@@ -130,9 +148,10 @@ class GitPageAPI:
                 attachment_type=allure.attachment_type.JSON
             )
 
+
             allure.attach(
                 body=decoded_text,
-                name="Раскодированное содержимое файла (decoded_text)",
+                name=download_name,
                 attachment_type=allure.attachment_type.TEXT
             )
 
@@ -140,9 +159,17 @@ class GitPageAPI:
 
     @allure.step("Изменение последнего созданного файла в репозитории")
     def update_file(self, login: str, repo_name: str, file_name: str, to_base64, new_text: str, sha):
+        """
+
+        :param login: Логин пользователя (получается из фикстуры credentials)
+        :param repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
+        :param file_name: Имя файла (формируется при помощи библиотеки faker)
+        :param new_text: Новое текстовое содержимое файла
+        :param sha: SHA-хэш обновляемого файла (обязательно для GitHub API)
+        :return: Ответ от API в формате JSON
+        """
         url = f"{self.url}/repos/{login}/{repo_name}/contents/{file_name}"
-        # new_text = "def greeting():\n    print('Hello, World!')\ngreeting()\n"
-        encoded_string = to_base64(new_text)
+        decoded_text = to_base64(new_text)
         with allure.step("Данные для коммита"):
             commit = {
                 "message": f"Update file {file_name}",
@@ -150,7 +177,7 @@ class GitPageAPI:
                     "name": f"{fake_login}",
                     "email": f"{fake_email}"
                 },
-                "content": encoded_string,
+                "content": decoded_text,
                 "sha": sha
             }
             allure.attach(
@@ -158,6 +185,7 @@ class GitPageAPI:
                 name="Сформированные метаданные файла (commit)",
                 attachment_type=allure.attachment_type.JSON
             )
+
 
         response = requests.put(url, headers=self.headers, json=commit)
         if response.status_code not in [200, 201]:
@@ -188,13 +216,24 @@ class GitPageAPI:
                 name="Сформированные метаданные файла (file_data)",
                 attachment_type=allure.attachment_type.JSON
             )
+
+            download_name = file_data["content"].get("name") or file_name.split("/")[-1]
+
+            allure.attach(
+                body=new_text,
+                name=download_name,
+                attachment_type=allure.attachment_type.TEXT
+            )
         return response.status_code, file_data
 
     @allure.step("Удаление последнего созданного в репозитории файла")
     def delete_last_modified_file(self, login: str, repo_name: str, file_name: str):
         """
-        Находит последний измененный файл и удаляет его.
-        Если передан file_name, берется именно он, иначе ищется динамически.
+
+        :param login: Логин пользователя (получается из фикстуры credentials)
+        :param repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
+        :param file_name: Имя файла (формируется при помощи библиотеки faker)
+        :return: Статус код выполнения операции удаления файла
         """
         commits_url = f"{self.url}/repos/{login}/{repo_name}/commits"
         commits_response = requests.get(commits_url, headers=self.headers, params={"per_page": 1})
@@ -245,8 +284,14 @@ class GitPageAPI:
 
         response = requests.delete(content_url, headers=self.headers, json=data)
         return response.status_code
+
     @allure.step("Удаление репозитория")
     def delete_repo(self, repo_name: str):
+        """
+        Удаляет последний созданный репозиторий
+        :param repo_name: Имя репозитория (формируется автоматически при помощи фикстуры repo_name)
+        :return: Статус код выполнения операции удаления репозитория
+        """
         url = f"{self.url}/repos/{self.login}/{repo_name}"
         response = requests.delete(url, headers=self.headers)
         return response.status_code
@@ -274,7 +319,6 @@ class GitPageAPI:
             print(f"У пользователя {login} не найдено репозиториев.")
             return None
 
-        # Извлекаем данные самого последнего обновленного репозитория
         repos_sorted = sorted(repos, key=lambda x: x.get("updated_at", ""), reverse=True)
         latest_repo = repos_sorted[0]
         repo_name = latest_repo["name"]

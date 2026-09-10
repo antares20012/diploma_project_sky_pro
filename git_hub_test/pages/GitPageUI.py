@@ -1,5 +1,6 @@
 import time
 import os
+import allure
 from datetime import datetime
 from random import randint
 from selenium.common import TimeoutException
@@ -9,62 +10,83 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
 
+
+
 class GitPage:
+    """
+        Класс Page Object для взаимодействия с веб-интерфейсом платформы GitHub.
+
+        Обеспечивает автоматизацию сквозного сценария (E2E): авторизацию,
+        создание репозитория, добавление, редактирование и удаление файлов,
+        а также полное удаление репозитория.
+        """
+    LOGIN_FIELD = (By.XPATH, "//input[@id='login_field']")
+    PASSWORD_FIELD = (By.XPATH,  "//input[@id='password']")
+    REPO_NAME_INPUT = (By.XPATH, "//input[@id='repository-name-input']")
+    LOGIN_COMMIT = (By.XPATH, "//input[@name='commit']")
+    AVATAR_BTN = (By.CSS_SELECTOR, "img[alt='User avatar']")
+    PROFILE_BTN = (By.XPATH, "//*[translate(text(), 'PROFILE', 'profile')='profile']" )
+    REPO_SUBMIT_BTN = (By.CSS_SELECTOR, "button[type='submit']")
+    CREATE_EMPTY_FILE = (By.XPATH, "//a[normalize-space()='creating a new file']")
+
+
     def __init__(self, driver, url: str, credentials):
         """
-        Конструктор класса GitPage.
-        :param driver: WebDriver — объект драйвера Selenium.
+           Инициализирует объект страницы GitHub.
+
+           :param driver: WebDriver — объект драйвера Selenium для управления браузером.
+           :param url: str — базовый URL-адрес платформы (например, https://github.com).
+           :param credentials: dict — словарь с учетными данными пользователя {'login': '...', 'password': '...'}.
         """
         self.driver = driver
         self.url = url
         self.credentials = credentials
         self.wait = WebDriverWait(driver, 10)
 
-
+    # @allure.step("Вход в GitHub")
     def login_git(self, login: str, password: str):
-        """Входит на страницу пользователя на проприетарной платформе разработчиков Github.
-        url = https://github.com/login
-        Вводит указанные в фикстуре логин и пароль
-        :param login:
-        :param password:
+        """
+        Выполняет авторизацию пользователя на странице /login.
+
+        Вводит переданные логин и пароль в соответствующие текстовые поля
+        и кликает по кнопке подтверждения ("Sign in").
+
+        :param login: str — логин или email пользователя.
+        :param password: str — пароль от учетной записи.
         :return: None
         """
 
-        self.driver.get(self.url + "/login")
+        with allure.step(f"Вход в GitHub под пользователем: {login}"):
+            self.driver.get(self.url + "/login")
 
-        login_field = self.wait.until(
-            EC.presence_of_element_located((
-                By.XPATH, "//input[@id='login_field']"
-            )))
-        login_field.send_keys(login)
-        time.sleep(1)
+            login_field = self.wait.until(
+                EC.presence_of_element_located(self.LOGIN_FIELD))
+            login_field.send_keys(login)
+            time.sleep(1)
 
-        password_field = self.wait.until(
-            EC.presence_of_element_located((
-                By.XPATH,  "//input[@id='password']"
-            )))
-        password_field.send_keys(password)
-        time.sleep(2.3)
+            password_field = self.wait.until(
+                EC.presence_of_element_located(self.PASSWORD_FIELD))
+            password_field.send_keys(password)
+            time.sleep(2.3)
 
-        commit_btn = self.wait.until(
-            EC.element_to_be_clickable((
-                By.XPATH, "//input[@name='commit']")))
-        commit_btn.click()
+            commit_btn = self.wait.until(
+                EC.element_to_be_clickable(self.LOGIN_COMMIT))
+            commit_btn.click()
 
+    @allure.step("Получение имени пользователя, вошедшего в GitHub")
     def get_logged_in_username(self) -> str:
         """
-        Возвращает имя пользователя, который авторизовался при помощи логина и пароля.
-        :return: Username
+        Извлекает имя текущего авторизованного пользователя из его профиля.
+
+        Метод кликает по аватару в правом верхнем углу, переходит в профиль
+        и считывает текст из элемента юзернейма для верификации успешного входа.
+
+        :return: str — отображаемое имя пользователя (vcard-username).
         """
-        avatar_button = self.wait.until(EC.visibility_of_element_located((
-            By.CSS_SELECTOR, "img[alt='User avatar']"
-        )))
+        avatar_button = self.wait.until(EC.visibility_of_element_located(self.AVATAR_BTN))
         self.driver.execute_script("arguments[0].click();", avatar_button)
 
-        profile_button = self.wait.until(EC.element_to_be_clickable((
-            By.XPATH,
-            "//*[translate(text(), 'PROFILE', 'profile')='profile']"
-        )))
+        profile_button = self.wait.until(EC.element_to_be_clickable(self.PROFILE_BTN))
         profile_button.click()
 
         username_element = self.wait.until(
@@ -72,14 +94,19 @@ class GitPage:
         )
         return username_element.text.strip()
 
+    @allure.step("Создание репозитория на странице авторизованного пользователя GitHub")
     def create_repository(self, login: str, timestamp: str = None) -> str:
         """
-        1. Авторизуется на странице пользователя.
-        2. Создает ПУСТОЙ репозиторий на странице авторизованного пользователя с заданным именем.
-        :param login:
-        :param timestamp:
-        :return: repo_name
+           Создает новый пустой публичный/приватный репозиторий.
+
+           Имя репозитория формируется динамически на основе логина и временной метки
+           для обеспечения уникальности при повторных запусках тестов.
+
+           :param login: str — логин пользователя (используется как префикс имени репозитория).
+           :param timestamp: str, optional — уникальная временная метка. Если не передана, генерируется автоматически.
+           :return: str — сгенерированное имя созданного репозитория (формат: login_timestamp).
         """
+
         if not timestamp:
             timestamp = os.environ.get("MY_FILE_TIMESTAMP") or datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -88,7 +115,7 @@ class GitPage:
         self.wait.until(EC.visibility_of_element_located((By.XPATH, "//button[@id='owner-dropdown-header-button']")))
 
         repo_name_input = self.wait.until(
-            EC.element_to_be_clickable((By.XPATH, "//input[@id='repository-name-input']"))
+            EC.element_to_be_clickable(self.REPO_NAME_INPUT)
         )
 
         repo_name = f"{login}_{timestamp}"
@@ -98,7 +125,7 @@ class GitPage:
         time.sleep(2)
 
         create_button = self.wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
+            EC.element_to_be_clickable(self.REPO_SUBMIT_BTN)
         )
         self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", create_button)
         time.sleep(3)
@@ -113,17 +140,20 @@ class GitPage:
         print(f"Создан репозиторий: {repo_name}")
         return repo_name
 
+    @allure.step("Создание пустого файла в новом репозитории GitHub")
     def create_new_file(self, repo_name: str, file_name: str, timestamp: str = None) -> str:
         """
-        1. Авторизуется на странице пользователя.
-        2. Создает ПУСТОЙ файл в репозитории авторизованного пользователя.
-        3. Оставляет коммит при создании файла.
-        :param repo_name:
-        :param file_name:
-        :param timestamp:
-        :return final_file_name:
+        Создает новый пустой файл в указанном репозитории.
+
+        Переходит по прямому URL репозитория, нажимает кнопку создания файла,
+        вводит уникальное имя файла с временной меткой и подтверждает коммит.
+
+        :param repo_name: str — имя целевого репозитория, в котором создается файл.
+        :param file_name: str — базовое имя файла (может включать расширение, например 'test.py').
+        :param timestamp: str, optional — временная метка для уникализации имени файла.
+        :return: str — финальное имя созданного файла с учетом временной метки.
         """
-        # 1. Формирование имени файла
+
         if not timestamp:
             timestamp = os.environ.get("MY_FILE_TIMESTAMP") or datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -133,26 +163,20 @@ class GitPage:
         else:
             final_file_name = f"{file_name}_{timestamp}"
 
-        # 2. Переход в репозиторий
+
         login = self.credentials['login']
         repo_url = f"https://github.com/{login}/{repo_name}"
         self.driver.get(repo_url)
 
-        # 3. Клик по ссылке создания нового файла
-        # GitHub часто меняет структуру (кнопка "Add file" -> "Create new file").
-        # Этот селектор ищет как прямую ссылку, так и кнопку в выпадающем меню Add File
-        create_new_file_link = self.wait.until(EC.presence_of_element_located((
-            By.XPATH, "//a[normalize-space()='creating a new file']"
-        )))
+        create_new_file_link = self.wait.until(EC.presence_of_element_located(self.CREATE_EMPTY_FILE))
         create_new_file_link.click()
 
-        # 4. Ввод имени файла
+
         file_name_input = self.wait.until(EC.visibility_of_element_located((
             By.XPATH,
             "//input[@aria-label='File name'] | //input[@name='filename'] | //input[contains(@data-testid, 'file-name-editor')]"
         )))
 
-        # Более надежная очистка поля перед вводом text
         file_name_input.click()
         file_name_input.clear()
         if file_name_input.get_attribute("value"):
@@ -161,18 +185,15 @@ class GitPage:
 
         file_name_input.send_keys(final_file_name)
 
-        # 5. Открытие диалога коммита
-        # Кнопка 'Commit changes...' часто имеет тип submit или button
         commit_dialog_btn = self.wait.until(EC.element_to_be_clickable((
             By.XPATH,
             "//button[contains(., 'Commit changes') or @data-testid='dialog-show-commit-changes-dialog']"
         )))
-        # Имитация человеческой задержки перед отправкой формы
+
         time.sleep(randint(2, 4))
         commit_dialog_btn.click()
 
-        # 6. Подтверждение коммита во всплывающем окне
-        # Селектор "button:nth-of-type(2)" крайне хрупок. Используем точный data-testid или текст внутри модалки
+
         confirm_commit_btn = self.wait.until(EC.element_to_be_clickable((
             By.XPATH, "//button[@aria-disabled='false']"
         )))
@@ -183,14 +204,19 @@ class GitPage:
 
         return final_file_name
 
+    @allure.step("Измененеие пустого файла file_name")
     def code_editor(self, repo_name: str, file_name: str, timestamp: str) -> str:
         """
-        1. Изменяет содержимое созданного файла.
-        2. Оставляет коммит при сохранении изменений.
-        :param repo_name:
-        :param file_name:
-        :param timestamp:
-        :return:
+            Открывает встроенный текстовый редактор GitHub и изменяет содержимое файла.
+
+            Метод находит созданный файл в корне репозитория, нажимает на иконку редактирования,
+            очищает старое содержимое, вставляет шаблонный код на Python ("Hello, World!")
+            и сохраняет изменения, указывая текущее время в сообщении коммита.
+
+            :param repo_name: str — имя репозитория.
+            :param file_name: str — точное имя изменяемого файла.
+            :param timestamp: str — временная метка (не используется напрямую, заменяется на актуальное время коммита).
+            :return: str — текст сообщения коммита (Commit Message).
         """
 
         current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -243,15 +269,16 @@ class GitPage:
         print(f"Файл {file_name} успешно сохранен!")
         return f"Update {file_name} at {current_time_str}"
 
+    @allure.step("Удаление последнего созданного файла")
     def delete_file(self, login: str, repo_name: str, file_name: str) ->str:
-        """
-        1. Удаляет созданный в репозитории файл.
-        2. Оставляет заданный коммит.
-        :param login: login
-        :param repo_name: repo_name
-        :param file_name: file_name
-        :return:
-        """
+        """Удаляет файл из репозитория через веб-интерфейс.
+        Переходит к файлу,
+        открывает контекстное меню дополнительных действий ("More file actions"),
+        выбирает пункт "Delete file" и подтверждает операцию коммитом.
+        :param login: str — логин владельца репозитория.
+        :param repo_name: str — имя репозитория.
+        :param file_name: str — имя удаляемого файла.
+        :return: str — статусная строка, подтверждающая удаление."""
         current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         repo_url = f"https://github.com/{login}/{repo_name}"
@@ -291,75 +318,79 @@ class GitPage:
         confirm_commit_btn.click()
         return f"Deleted: {file_name}"
 
+
     def delete_repo(self, login: str, password: str, repo_name: str) ->str:
         """
-        Удаляет созданный репозиторий
-        :param login:
-        :param password:
-        :param repo_name:
-        :return:
+            Полностью удаляет репозиторий из учетной записи GitHub.
+            Проходит многоэтапную процедуру подтверждения в "Danger Zone" настроек:
+            клики по кнопкам предупреждений, ввод проверочного текста формата "login/repo_name".
+            При необходимости (в зависимости от сессии GitHub) обрабатывает окно повторного ввода пароля (Sudo-режим).
+            :param login: str — логин владельца репозитория.
+            :param password: str — пароль для прохождения Sudo-проверки GitHub.
+            :param repo_name: str — имя удаляемого репозитория.
+            :return: str — текст всплывающего уведомления об успешном удалении (успешный alert).
         """
-        repo_url = f"https://github.com/{login}/{repo_name}"
-        if self.driver.current_url != repo_url:
-            self.driver.get(repo_url)
 
-        settings_btn = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, "//span[normalize-space()='Settings']"))
-        )
-        settings_btn.click()
+        with allure.step(f"Удаление репозитория пользователем: {login}"):
+            repo_url = f"https://github.com/{login}/{repo_name}"
+            if self.driver.current_url != repo_url:
+                self.driver.get(repo_url)
 
-        delete_repo_btn = self.wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "#dialog-show-repo-delete-menu-dialog"))
-        )
-
-        # 3. Скроллим до кнопки, чтобы она точно была в зоне видимости драйвера
-        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", delete_repo_btn)
-        time.sleep(1)
-        delete_repo_btn.click()
-
-        want_btn = self.wait.until(
-            EC.presence_of_element_located((
-                By.XPATH, "//span[contains(text(),'I want to delete this repository')]"
-            )))
-        want_btn.click()
-        time.sleep(2)
-        understand_btn = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'I have read and understand these effects')]"))
-        )
-        understand_btn.click()
-        time.sleep(2)
-
-        time.sleep(2)
-        verification_field = self.wait.until(
-            EC.visibility_of_element_located((By.XPATH, "//input[@id='verification_field']"))
-        )
-        verification_field.clear()
-        verification_field.send_keys(f"{login}/{repo_name}")
-        time.sleep(1)
-
-        proceed_btn = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#repo-delete-proceed-button")))
-        proceed_btn.click()
-        time.sleep(1)
-
-        try:
-            # Ждем появления поля ввода пароля (максимум 5 секунд, чтобы не затягивать)
-            sudo_pwd = WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located((By.XPATH, "//input[@id='sudo_password']"))
+            settings_btn = self.wait.until(
+                EC.presence_of_element_located((By.XPATH, "//span[normalize-space()='Settings']"))
             )
-            sudo_pwd.clear()
-            sudo_pwd.send_keys(password)
+            settings_btn.click()
 
-            delete_commit_btn = self.wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//form[@action='/sudo']//button[@type='submit']"))
+            delete_repo_btn = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#dialog-show-repo-delete-menu-dialog"))
             )
-            delete_commit_btn.click()
-            print("Пароль потребовался и был успешно введен.")
-        except TimeoutException:
-            print("Ввод пароля не потребовался, репозиторий удален сразу.")
 
-            # 8. Проверка успешного удаления по всплывающему уведомлению
-        success_alert = self.wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "//div[@role='alert'] | //div[contains(@class, 'js-flash-alert')]"))
-        )
-        return success_alert.text
+
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", delete_repo_btn)
+            time.sleep(1)
+            delete_repo_btn.click()
+
+            want_btn = self.wait.until(
+                EC.presence_of_element_located((
+                    By.XPATH, "//span[contains(text(),'I want to delete this repository')]"
+                )))
+            want_btn.click()
+            time.sleep(2)
+            understand_btn = self.wait.until(
+                EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'I have read and understand these effects')]"))
+            )
+            understand_btn.click()
+            time.sleep(2)
+
+            time.sleep(2)
+            verification_field = self.wait.until(
+                EC.visibility_of_element_located((By.XPATH, "//input[@id='verification_field']"))
+            )
+            verification_field.clear()
+            verification_field.send_keys(f"{login}/{repo_name}")
+            time.sleep(1)
+
+            proceed_btn = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#repo-delete-proceed-button")))
+            proceed_btn.click()
+            time.sleep(1)
+
+            try:
+                sudo_pwd = WebDriverWait(self.driver, 5).until(
+                    EC.visibility_of_element_located((By.XPATH, "//input[@id='sudo_password']"))
+                )
+                sudo_pwd.clear()
+                sudo_pwd.send_keys(password)
+
+                delete_commit_btn = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//form[@action='/sudo']//button[@type='submit']"))
+                )
+                delete_commit_btn.click()
+                print("Пароль потребовался и был успешно введен.")
+            except TimeoutException:
+                print("Ввод пароля не потребовался, репозиторий удален сразу.")
+
+            success_alert = self.wait.until(
+                EC.visibility_of_element_located(
+                    (By.XPATH, "//div[@role='alert'] | //div[contains(@class, 'js-flash-alert')]"))
+            )
+            return success_alert.text

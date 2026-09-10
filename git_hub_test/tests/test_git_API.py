@@ -98,7 +98,7 @@ def test_read_file(git_api, repo_name, credentials, random_faker_file_name: str,
     file_sha = create_data["content"]["sha"]
 
     # 2. Обновляем файл текстом
-    expected_text = "def greeting():\n    print('Hello, World!')\n"
+    expected_text = "def greeting():\n    print('Hello, World!')\ngreeting()\n"
     status_update, update_data = git_api.update_file(
         login=login,
         repo_name=repo_name,
