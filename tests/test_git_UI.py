@@ -30,12 +30,14 @@ def test_check_profile(driver, credentials):
 @allure.feature("GitHub")
 @allure.story("Создание репозитория")
 @allure.severity(allure.severity_level.CRITICAL)
-def test_create_repo(driver, credentials):
+def test_create_repo(driver, credentials, repo_name):
     """Тест просто проверяет работоспособность фикстуры создания репозитория."""
     timestamp = os.environ.get("MY_FILE_TIMESTAMP")
     git_test = GitPage(driver, "https://github.com", credentials)
     git_test.login_git(credentials['login'], credentials['password'])
     git_test.create_repository(login=credentials['login'], timestamp=timestamp)
+    time.sleep(3)
+    git_test.delete_repo(login=credentials['login'], password=credentials['password'], repo_name=repo_name)
 
 @allure.title("Тестирование создания пустого файла в новом репозитории авторизованного пользователя в GitHub")
 @allure.description("Проверяет успешное создание нового пустого файла после создания репозитория")

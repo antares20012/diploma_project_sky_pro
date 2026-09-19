@@ -28,7 +28,15 @@ class GitPage:
     PROFILE_BTN = (By.XPATH, "//*[translate(text(), 'PROFILE', 'profile')='profile']" )
     REPO_SUBMIT_BTN = (By.CSS_SELECTOR, "button[type='submit']")
     CREATE_EMPTY_FILE = (By.XPATH, "//a[normalize-space()='creating a new file']")
-
+    OWNER = (By.XPATH, "//button[@id='owner-dropdown-header-button']")
+    FILE_NAME_INPUT = (By.XPATH, "//input[@aria-label='File name'] | //input[@name='filename'] | //input[contains(@data-testid, 'file-name-editor')]")
+    SETTINGS_BTN = (By.XPATH, "//span[normalize-space()='Settings']")
+    DELETE_REPO_BTN = (By.CSS_SELECTOR, "#dialog-show-repo-delete-menu-dialog")
+    WANT_BTN = (By.XPATH, "//span[contains(text(),'I want to delete this repository')]")
+    UNDERSTAND_BTN = (By.XPATH, "//span[contains(text(),'I have read and understand these effects')]")
+    DELETE_COMMIT_BTN = (By.XPATH, "//form[@action='/sudo']//button[@type='submit']")
+    PROCEED_BTN = (By.CSS_SELECTOR, "#repo-delete-proceed-button")
+    VERIFICATION_FIELD = (By.XPATH, "//input[@id='verification_field']")
 
     def __init__(self, driver, url: str, credentials):
         """
@@ -41,7 +49,7 @@ class GitPage:
         self.driver = driver
         self.url = url
         self.credentials = credentials
-        self.wait = WebDriverWait(driver, 10)
+        self.wait = WebDriverWait(driver, 15)
 
     # @allure.step("Вход в GitHub")
     def login_git(self, login: str, password: str):
@@ -112,7 +120,7 @@ class GitPage:
 
         self.driver.get(self.url + "/new")
 
-        self.wait.until(EC.visibility_of_element_located((By.XPATH, "//button[@id='owner-dropdown-header-button']")))
+        self.wait.until(EC.visibility_of_element_located(self.OWNER))
 
         repo_name_input = self.wait.until(
             EC.element_to_be_clickable(self.REPO_NAME_INPUT)
@@ -172,10 +180,7 @@ class GitPage:
         create_new_file_link.click()
 
 
-        file_name_input = self.wait.until(EC.visibility_of_element_located((
-            By.XPATH,
-            "//input[@aria-label='File name'] | //input[@name='filename'] | //input[contains(@data-testid, 'file-name-editor')]"
-        )))
+        file_name_input = self.wait.until(EC.visibility_of_element_located(self.FILE_NAME_INPUT))
 
         file_name_input.click()
         file_name_input.clear()
@@ -336,41 +341,34 @@ class GitPage:
             if self.driver.current_url != repo_url:
                 self.driver.get(repo_url)
 
-            settings_btn = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//span[normalize-space()='Settings']"))
-            )
+            settings_btn = self.wait.until(EC.presence_of_element_located(self.SETTINGS_BTN))
             settings_btn.click()
 
-            delete_repo_btn = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#dialog-show-repo-delete-menu-dialog"))
-            )
+            delete_repo_btn = self.wait.until(EC.presence_of_element_located(self.DELETE_REPO_BTN))
 
 
             self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", delete_repo_btn)
             time.sleep(1)
             delete_repo_btn.click()
 
-            want_btn = self.wait.until(
-                EC.presence_of_element_located((
-                    By.XPATH, "//span[contains(text(),'I want to delete this repository')]"
-                )))
+            want_btn = self.wait.until(EC.presence_of_element_located(self.WANT_BTN))
             want_btn.click()
             time.sleep(2)
             understand_btn = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//span[contains(text(),'I have read and understand these effects')]"))
+                EC.presence_of_element_located(self.UNDERSTAND_BTN)
             )
             understand_btn.click()
             time.sleep(2)
 
             time.sleep(2)
             verification_field = self.wait.until(
-                EC.visibility_of_element_located((By.XPATH, "//input[@id='verification_field']"))
+                EC.visibility_of_element_located(self.VERIFICATION_FIELD)
             )
             verification_field.clear()
             verification_field.send_keys(f"{login}/{repo_name}")
             time.sleep(1)
 
-            proceed_btn = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#repo-delete-proceed-button")))
+            proceed_btn = self.wait.until(EC.element_to_be_clickable(self.PROCEED_BTN))
             proceed_btn.click()
             time.sleep(1)
 
@@ -381,9 +379,7 @@ class GitPage:
                 sudo_pwd.clear()
                 sudo_pwd.send_keys(password)
 
-                delete_commit_btn = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//form[@action='/sudo']//button[@type='submit']"))
-                )
+                delete_commit_btn = self.wait.until(EC.element_to_be_clickable(self.DELETE_COMMIT_BTN))
                 delete_commit_btn.click()
                 print("Пароль потребовался и был успешно введен.")
             except TimeoutException:
